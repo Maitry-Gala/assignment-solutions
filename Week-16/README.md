@@ -39,12 +39,5 @@ This folder contains assignments focused on problem solving using TypeScript.
    npm run all
    ```
 
----
-
-## Demo Video
-
-For a walkthrough on navigating through the assignments, check out this demo video:
-
-https://gist.github.com/user-attachments/assets/4c2433a9-cb76-4805-9912-729b9bd52277
 
 
