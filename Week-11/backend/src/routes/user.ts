@@ -28,7 +28,7 @@ userRouter.post("/signup", async function (req, res) {
     });
   }
 
-  const { email, password, firstName, lastName } = req.body;
+  const { email, password, firstName, lastName } = ParsedDataWithSuccess.data;
 
   try {
     const existingUser = await UserModel.findOne({
@@ -77,7 +77,7 @@ userRouter.post("/signin", async function (req, res) {
     });
   }
 
-  const { email, password } = req.body;
+  const { email, password } = parsed.data;
   try {
     const user = await UserModel.findOne({
       email: email,
