@@ -3,6 +3,7 @@ import z from "zod";
 import bcrypt from "bcryptjs";
 import { AccountModel, UserModel } from "../db";
 import jwt from "jsonwebtoken";
+import { auth } from "../middleware";
 
 export const userRouter = Router();
 const JWT_USER_SECRET = process.env.JWT_USER_SECRET;
@@ -29,8 +30,17 @@ userRouter.post("/signup", async function (req, res) {
 
   const { email, password, firstName, lastName } = req.body;
 
-  const hashedPassword = await bcrypt.hash(password, 3);
   try {
+    const existingUser = await UserModel.findOne({
+      email: email,
+    });
+    if (existingUser) {
+      return res.status(401).json({
+        message: "User already exists",
+      });
+    }
+    const hashedPassword = await bcrypt.hash(password, 3);
+
     const user = await UserModel.create({
       email: email,
       password: hashedPassword,
@@ -42,15 +52,15 @@ userRouter.post("/signup", async function (req, res) {
       userId: user._id,
       balance: Math.floor(Math.random() * 10000),
     });
+
+    res.json({
+      message: "Signup succed!",
+    });
   } catch (e) {
-    return res.json({
-      message: "User already exists",
+    return res.status(500).json({
+      message: "Something went wrong",
     });
   }
-
-  res.json({
-    message: "Signup succed!",
-  });
 });
 
 userRouter.post("/signin", async function (req, res) {
@@ -68,38 +78,44 @@ userRouter.post("/signin", async function (req, res) {
   }
 
   const { email, password } = req.body;
-
-  const user = await UserModel.findOne({
-    email: email,
-  });
-  console.log(user);
-
-  if (!user) {
-    return res.status(403).json({
-      message: "User doesnt exist in our database",
+  try {
+    const user = await UserModel.findOne({
+      email: email,
     });
-  }
+    console.log(user);
 
-  const passwordMatched = await bcrypt.compare(password, user.password);
-  if (passwordMatched) {
-    const token = jwt.sign(
-      {
-        id: user._id.toString(),
-      },
-      JWT_USER_SECRET!,
-    );
+    if (!user) {
+      return res.status(403).json({
+        message: "User doesnt exist in our database",
+      });
+    }
 
-    res.json({
-      token: token,
-      message: "you are signed in!",
-    });
-  } else {
-    res.status(403).json({
-      message: "Incorrect creds!",
+    const passwordMatched = await bcrypt.compare(password, user.password);
+    if (passwordMatched) {
+      const token = jwt.sign(
+        {
+          id: user._id.toString(),
+        },
+        JWT_USER_SECRET!,
+      );
+
+      res.json({
+        token: token,
+        message: "you are signed in!",
+      });
+    } else {
+      res.status(403).json({
+        message: "Incorrect creds!",
+      });
+    }
+  } catch (e) {
+    return res.status(500).json({
+      message: "Something went wrong",
     });
   }
 });
-userRouter.put("/", authmiddleware, async function (req,res) {
+
+userRouter.put("/", auth, async function (req, res) {
   const updateBody = z.object({
     mail: z.string().min(3).max(25).email().optional(),
     password: z
@@ -120,11 +136,55 @@ userRouter.put("/", authmiddleware, async function (req,res) {
     });
   }
 
-  try{
-    await UserModel.updateOne({
-        _id: req.userId
-    },{
-        $set: req.body
-    })
+  try {
+    await UserModel.updateOne(
+      {
+        _id: req.userId,
+      },
+      {
+        $set: req.body,
+      },
+    );
+
+    return res.status(200).json({
+      message: "Data updated successfully",
+    });
+  } catch (e) {
+    return res.status(500).json({
+      message: "Something went wrong",
+    });
   }
+});
+
+userRouter.get("/bulk", auth, async (req, res) => {
+  const filter = req.query.filter || "";
+
+  const users = await UserModel.find({
+    _id: {
+      $ne: req.userId,
+    },
+    $or: [
+      {
+        firstName: {
+          $regex: filter,
+          $options: "i",
+        },
+      },
+      {
+        lastName: {
+          $regex: filter,
+          $options: "i",
+        },
+      },
+    ],
+  });
+
+  res.json({
+    users: users.map((user) => ({
+      _id: user._id,
+      username: user.email,
+      firstName: user.firstname,
+      lastName: user.lastname,
+    })),
+  });
 });
