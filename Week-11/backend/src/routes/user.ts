@@ -6,7 +6,6 @@ import jwt from "jsonwebtoken";
 import { auth } from "../middleware";
 
 export const userRouter = Router();
-const JWT_USER_SECRET = process.env.JWT_USER_SECRET;
 
 userRouter.post("/signup", async function (req, res) {
   const requiredBody = z.object({
@@ -91,31 +90,33 @@ userRouter.post("/signin", async function (req, res) {
     }
 
     const passwordMatched = await bcrypt.compare(password, user.password);
+
     if (passwordMatched) {
       const token = jwt.sign(
         {
           id: user._id.toString(),
         },
-        JWT_USER_SECRET!,
+        process.env.JWT_USER_SECRET!,
       );
 
-      res.json({
+      return res.json({
         token: token,
         message: "you are signed in!",
       });
     } else {
-      res.status(403).json({
+      return res.status(403).json({
         message: "Incorrect creds!",
       });
     }
   } catch (e) {
+    console.log(e);
     return res.status(500).json({
       message: "Something went wrong",
     });
   }
 });
 
-userRouter.put("/", auth, async function (req, res) {
+userRouter.put("/update", auth, async function (req, res) {
   const updateBody = z.object({
     mail: z.string().min(3).max(25).email().optional(),
     password: z
@@ -124,8 +125,8 @@ userRouter.put("/", auth, async function (req, res) {
       .max(8)
       .regex(/^(?=.*[A-Z])(?=.*[a-z])(?=.*[@!$%*?&])[A-Za-z\d@!$%*?&]+$/)
       .optional(),
-    firstName: z.string().min(3).max(10).optional(),
-    lastName: z.string().min(3).max(10).optional(),
+    firstname: z.string().min(3).max(10).optional(),
+    lastname: z.string().min(3).max(10).optional(),
   });
 
   const parsed = updateBody.safeParse(req.body);
@@ -135,20 +136,21 @@ userRouter.put("/", auth, async function (req, res) {
       message: "Invalid inputs",
     });
   }
-
+  console.log(parsed.data);
   try {
     await UserModel.updateOne(
       {
         _id: req.userId,
       },
       {
-        $set: req.body,
+        $set: parsed.data,
       },
     );
 
     return res.status(200).json({
       message: "Data updated successfully",
     });
+
   } catch (e) {
     return res.status(500).json({
       message: "Something went wrong",
@@ -157,21 +159,19 @@ userRouter.put("/", auth, async function (req, res) {
 });
 
 userRouter.get("/bulk", auth, async (req, res) => {
-  const filter = req.query.filter || "";
-
+  const filter = (req.query.filter as string) || "";
+  console.log(filter);
   const users = await UserModel.find({
-    _id: {
-      $ne: req.userId,
-    },
+    _id: { $ne: req.userId },
     $or: [
       {
-        firstName: {
+        firstname: {
           $regex: filter,
           $options: "i",
         },
       },
       {
-        lastName: {
+        lastname: {
           $regex: filter,
           $options: "i",
         },
